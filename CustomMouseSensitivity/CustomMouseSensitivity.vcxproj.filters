@@ -3,11 +3,13 @@
   <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="script.cpp" />
+    <ClCompile Include="keyboard.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="script.h" />
     <ClInclude Include="third_party\rdr2scripthook\inc\main.h" />
     <ClInclude Include="third_party\rdr2scripthook\inc\natives.h" />
+    <ClInclude Include="keyboard.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="include">
