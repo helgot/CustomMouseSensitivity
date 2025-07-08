@@ -12,33 +12,46 @@
 
 using namespace std;
 
+
+// Target addresses offsets:
+constexpr uintptr_t kFirstPersonScaleOffset = 0x39806FC;
+constexpr uintptr_t kFirstPersonMouseLookOffset = 0x3973114;
+constexpr uintptr_t kFirstPersonMouseAimOffset = 0x3973118;
+constexpr uintptr_t kThirdPersonScaleOffset = 0x39806BC;
+constexpr uintptr_t kThirdPersonMouseMouseLookOffset = 0x3973128;
+constexpr uintptr_t kThirdPersonMouseAimOffset = 0x397312C;
+
+constexpr float kCoreEmptyScale = 0.9881422924f;
+constexpr float kInverseCoreEmptyScale = 1.0f / kCoreEmptyScale;
+constexpr float FirstPersonAimScale = 0.00914375018f;
+constexpr float ThirdPersonAimScale = 0.01117500011f;
+constexpr float DefaultScaleValue = 0.01666667f;
+//constexpr float ScopedSenseScale = 0.190525f;
+constexpr float FirstPersonScopedSenseScale = 0.087486349120136f;
+constexpr float ThirdPersonScopedSenseScale = 0.087486349120136f;
+constexpr float FirstPersonScopedCoreEmptyScale = 1.823375f;
+
+
+struct MouseSensitivitySettings {
+    float first_person_mouse_look_sensitivity;
+    float first_person_mouse_aim_sensitivity;
+    float third_person_mouse_look_sensitivity;
+    float third_person_mouse_aim_sensitivity;
+    bool fov_independent_rotation;
+    float scoped_sensitivity;
+};
+
+
+
+
 bool PatchAddress(void* target_address, const void* patch_bytes, size_t patch_size)
 {
-    //DWORD oldProtect;
-    //// Change memory protections to allow writing
-    //if (!VirtualProtect(target_address, patch_size, PAGE_EXECUTE_READWRITE, &oldProtect)) {
-    //    std::cerr << "Failed to change memory protection!" << std::endl;
-    //    return false;
-    //}
-
-    // Write the patch
     memcpy(target_address, patch_bytes, patch_size);
-
-    //// Restore original memory protections
-    //if (!VirtualProtect(target_address, patch_size, oldProtect, &oldProtect)) {
-    //    std::cerr << "Failed to restore memory protection!" << std::endl;
-    //    return false;
-    //}
-
-    //// Flush the CPU instruction cache to ensure changes are visible
-    //FlushInstructionCache(GetCurrentProcess(), target_address, patch_size);
-
     return true;
 }
 
 // Function to find the base address of RDR2.exe
 uintptr_t GetModuleBaseAddress(const char* moduleName) {
-    // Get a snapshot of all modules in the current process
     HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPMODULE, GetCurrentProcessId());
     if (hSnapshot == INVALID_HANDLE_VALUE) {
         std::cerr << "Failed to take snapshot of modules!" << std::endl;
@@ -73,7 +86,6 @@ std::string GetCurrentDirectoryFilePath(const std::string& fileName) {
 
 float GetPrivateProfileFloat(const std::string& section, const std::string& key, float defaultValue, const std::string& fileName) {
     char buffer[256];
-    // Retrieve the value as a string
     GetPrivateProfileStringA(section.c_str(), key.c_str(), "", buffer, sizeof(buffer), fileName.c_str());
 
     // Convert the string to a float
@@ -92,21 +104,7 @@ float GetPrivateProfileFloat(const std::string& section, const std::string& key,
     }
 }
 
-bool stringToBool(const std::string& str) {
-    // Convert the string to lowercase for case-insensitive comparison
-    std::string lowerStr = str;
-    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), ::tolower);
-
-    if (lowerStr == "true" || lowerStr == "1") {
-        return true;
-    } else if (lowerStr == "false" || lowerStr == "0") {
-        return false;
-    } else {
-        throw std::invalid_argument("Invalid string for boolean conversion: " + str);
-    }
-}
-bool string_to_bool(const std::string& str) {
-    // Convert the string to lowercase for case-insensitive comparison
+bool StringToBool(const std::string& str) {
     std::string lowerStr = str;
     std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(), ::tolower);
 
@@ -123,13 +121,10 @@ bool string_to_bool(const std::string& str) {
 
 float GetPrivateProfileBool(const std::string& section, const std::string& key, bool defaultValue, const std::string& fileName) {
     char buffer[256];
-    // Retrieve the value as a string
     GetPrivateProfileStringA(section.c_str(), key.c_str(), "", buffer, sizeof(buffer), fileName.c_str());
-
-    // Convert the string to a bool
     try {
         bool value;
-        return string_to_bool(buffer);
+        return StringToBool(buffer);
     }
     catch (const std::invalid_argument& e) {
         // If conversion fails, return the default value
@@ -143,63 +138,49 @@ float GetPrivateProfileBool(const std::string& section, const std::string& key, 
     }
 }
 
+void ParseIniFile(struct MouseSensitivitySettings& mouse_sensitivity_settings)
+{
+    const std::string config_filename = "CustomMouseSensitivity.ini";
+    mouse_sensitivity_settings.first_person_mouse_look_sensitivity = GetPrivateProfileFloat("FirstPerson", "FirstPersonMouseLookSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+    mouse_sensitivity_settings.first_person_mouse_aim_sensitivity = GetPrivateProfileFloat("FirstPerson", "FirstPersonMouseAimSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+    mouse_sensitivity_settings.third_person_mouse_look_sensitivity = GetPrivateProfileFloat("ThirdPerson", "ThirdPersonMouseLookSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+    mouse_sensitivity_settings.third_person_mouse_aim_sensitivity = GetPrivateProfileFloat("ThirdPerson", "ThirdPersonMouseAimSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+    mouse_sensitivity_settings.fov_independent_rotation = GetPrivateProfileBool("FirstPerson", "FOVIndependentRotation", true, GetCurrentDirectoryFilePath(config_filename));
+    const float scoped_sensitivity = GetPrivateProfileFloat("Misc", "ScopedSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+}
 
 void main()
 {
-    const std::string config_filename = "CustomMouseSensitivity.ini";
-    const float first_person_mouse_look_sensitivity = GetPrivateProfileFloat("FirstPerson", "FirstPersonMouseLookSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
-    const float first_person_mouse_aim_sensitivity = GetPrivateProfileFloat("FirstPerson", "FirstPersonMouseAimSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
-    const float third_person_mouse_look_sensitivity = GetPrivateProfileFloat("ThirdPerson", "ThirdPersonMouseLookSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
-    const float third_person_mouse_aim_sensitivity = GetPrivateProfileFloat("ThirdPerson", "ThirdPersonMouseAimSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
-    const bool fov_independent_rotation = GetPrivateProfileBool("FirstPerson", "FOVIndependentRotation", true, GetCurrentDirectoryFilePath(config_filename));
-    const float scoped_sensitivity = GetPrivateProfileFloat("Misc", "ScopedSensitivity", 1.0f, GetCurrentDirectoryFilePath(config_filename));
+	// Get settings from INI file:
+    struct MouseSensitivitySettings mouse_sensitivity_settings {};
+    ParseIniFile(mouse_sensitivity_settings);
 
+    constexpr float target_time_step = 0.0166667f;
+    constexpr float base_first_person_fov = 55.0f;
+    constexpr int kIntialInGameSliderValue = 0;
+   
+	// Varaibles to track game
     int screen_x, screen_y;
     int line_height = 10;
     float fov = 0.0f;
-    constexpr float target_time_step = 0.0166667f;
-    char buffer[64];
+
     bool is_first_person = false;
     bool is_in_scope = false;
     bool is_free_aiming = false;
     int core_value = 0;
-
-    const float base_first_person_fov = 55.0f;
-
     bool debug_enabled = false;
 
-    // Get base adddress of module:
+    char debug_label_text_buffer[64];
+
+    // Get base adddress of game in main memory:
     uintptr_t base_address = GetModuleBaseAddress("RDR2.exe");
 
-    // Target addresses offsets:
-    constexpr uintptr_t first_person_scale_offset = 0x39806FC; 
-    constexpr uintptr_t first_person_mouse_look_offset = 0x3973114; 
-    constexpr uintptr_t first_person_mouse_aim_offset = 0x3973118; 
-    constexpr uintptr_t third_person_scale_offset = 0x39806BC; 
-    constexpr uintptr_t third_person_mouse_look_offset = 0x3973128; 
-    constexpr uintptr_t third_person_mouse_aim_offset = 0x397312C; 
-
-    constexpr float core_empty_scale = 0.9881422924f;
-    constexpr float inv_core_empty_scale = 1.0f / core_empty_scale;
-    constexpr float first_person_scale_value = 0.00914375018f;
-    constexpr float third_person_scale_value = 0.01117500011f;
-    constexpr float default_scale_value = 0.01666667f;
-    //constexpr float scoped_sense_scale = 0.190525f;
-    constexpr float first_person_scoped_sense_scale = 0.087486349120136f;
-    constexpr float third_person_scoped_sense_scale = 0.087486349120136f;
-    constexpr float first_person_scoped_core_empty_scale = 1.823375f;
-
-    // 1.823375
-    // 0.104515 core empty scale sense.
- 
-    // Before main loop, patch slider values to all be 0.
-    {
-        int patch_value = 0;
-        PatchAddress(reinterpret_cast<void*>(base_address + first_person_mouse_look_offset), reinterpret_cast<const void*>(&patch_value), sizeof(patch_value));
-        PatchAddress(reinterpret_cast<void*>(base_address + first_person_mouse_aim_offset), reinterpret_cast<const void*>(&patch_value), sizeof(patch_value));
-        PatchAddress(reinterpret_cast<void*>(base_address + third_person_mouse_look_offset), reinterpret_cast<const void*>(&patch_value), sizeof(patch_value));
-        PatchAddress(reinterpret_cast<void*>(base_address + third_person_mouse_aim_offset), reinterpret_cast<const void*>(&patch_value), sizeof(patch_value));
-    }
+    // Before main loop, patch in-game slider values to all be 0.        
+    PatchAddress(reinterpret_cast<void*>(base_address + kFirstPersonMouseLookOffset), reinterpret_cast<const void*>(&kIntialInGameSliderValue), sizeof(kIntialInGameSliderValue));
+    PatchAddress(reinterpret_cast<void*>(base_address + kFirstPersonMouseAimOffset), reinterpret_cast<const void*>(&kIntialInGameSliderValue), sizeof(kIntialInGameSliderValue));
+    PatchAddress(reinterpret_cast<void*>(base_address + kThirdPersonMouseMouseLookOffset), reinterpret_cast<const void*>(&kIntialInGameSliderValue), sizeof(kIntialInGameSliderValue));
+    PatchAddress(reinterpret_cast<void*>(base_address + kThirdPersonMouseAimOffset), reinterpret_cast<const void*>(&kIntialInGameSliderValue), sizeof(kIntialInGameSliderValue));
+       
 
     while (true)
     {
@@ -215,8 +196,8 @@ void main()
         {
             // LOGGING:
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "FOV: %.4f", fov);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 0 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "FOV: %.4f", fov);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 0 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
             UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", is_first_person ? "First person: True" : "First person: False"), 0.01f, 0.01f + 1 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
@@ -224,27 +205,27 @@ void main()
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
             UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", is_free_aiming ? "FreeAiming: True" : "FreeAiming: False"), 0.01f, 0.01f +3 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "Stamina Core: %d", core_value);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 4 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "Stamina Core: %d", core_value);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 4 * 25.0f / screen_y);
 
             // Input Values:
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "ThirdPersonMouseLookSensitivity: %.4f", third_person_mouse_look_sensitivity);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 5 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "ThirdPersonMouseLookSensitivity: %.4f", mouse_sensitivity_settings.third_person_mouse_look_sensitivity);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 5 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "ThirdPersonMouseAimSensitivity: %.4f", third_person_mouse_aim_sensitivity);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 6 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "ThirdPersonMouseAimSensitivity: %.4f", mouse_sensitivity_settings.third_person_mouse_aim_sensitivity);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 6 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "FirstPersonMouseLookSensitivity: %.4f", first_person_mouse_look_sensitivity);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 7 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "FirstPersonMouseLookSensitivity: %.4f", mouse_sensitivity_settings.first_person_mouse_look_sensitivity);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 7 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "FirstPersonMouseAimSensitivity: %.4f", first_person_mouse_aim_sensitivity);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 8 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "FirstPersonMouseAimSensitivity: %.4f", mouse_sensitivity_settings.first_person_mouse_aim_sensitivity);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 8 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", fov_independent_rotation ? "ScaleRotationWithFOV: True" : "ScaleRotationWithFOV: False"), 0.01f, 0.01f + 9 * 25.0f / screen_y);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", mouse_sensitivity_settings.fov_independent_rotation ? "ScaleRotationWithFOV: True" : "ScaleRotationWithFOV: False"), 0.01f, 0.01f + 9 * 25.0f / screen_y);
             UI::SET_TEXT_SCALE(0.5f, 0.5f);
-            snprintf(buffer, sizeof(buffer), "ScopedSensitivity: %.4f", scoped_sensitivity);
-            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", buffer), 0.01f, 0.01f + 10 * 25.0f / screen_y);
+            snprintf(debug_label_text_buffer, sizeof(debug_label_text_buffer), "ScopedSensitivity: %.4f", mouse_sensitivity_settings.scoped_sensitivity);
+            UI::DRAW_TEXT(GAMEPLAY::CREATE_STRING(10, "LITERAL_STRING", debug_label_text_buffer), 0.01f, 0.01f + 10 * 25.0f / screen_y);
         }
 
         // Apply patches:
@@ -255,56 +236,54 @@ void main()
             {
                 if (is_first_person)
                 {
-                    patch_value = first_person_scoped_sense_scale * scoped_sensitivity;
+                    patch_value = FirstPersonScopedSenseScale * mouse_sensitivity_settings.scoped_sensitivity;
                 }
                 else
                 {
-                    patch_value = third_person_scoped_sense_scale * scoped_sensitivity;
+                    patch_value = ThirdPersonScopedSenseScale * mouse_sensitivity_settings.scoped_sensitivity;
                 }
 
                 // Patch both values: 
-                PatchAddress(reinterpret_cast<void*>(base_address + first_person_scale_offset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
-                PatchAddress(reinterpret_cast<void*>(base_address + third_person_scale_offset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
+                PatchAddress(reinterpret_cast<void*>(base_address + kFirstPersonScaleOffset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
+                PatchAddress(reinterpret_cast<void*>(base_address + kThirdPersonScaleOffset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
             }
             else if (is_first_person) // First-person:
             {
-                //WIP:
-                patch_value = first_person_scale_value;
+                patch_value = FirstPersonAimScale;
                 if (is_free_aiming)
                 {
-                    patch_value *= first_person_mouse_aim_sensitivity;
+                    patch_value *= mouse_sensitivity_settings.first_person_mouse_aim_sensitivity;
                 }
                 else
                 {
-                    patch_value *= first_person_mouse_look_sensitivity;
+                    patch_value *= mouse_sensitivity_settings.first_person_mouse_look_sensitivity;
                 }
 
-                if (fov_independent_rotation)
+                if (mouse_sensitivity_settings.fov_independent_rotation)
                 {
                     patch_value *= base_first_person_fov / fov;
                 }
 
-                //patch_value *= time_step / target_time_step;
-                PatchAddress(reinterpret_cast<void*>(base_address + first_person_scale_offset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
+                PatchAddress(reinterpret_cast<void*>(base_address + kFirstPersonScaleOffset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
             }
             else // Third-person:
             {
 
-                patch_value = third_person_scale_value;
+                patch_value = ThirdPersonAimScale;
                 if (is_free_aiming)
                 {
-                    patch_value *= third_person_mouse_aim_sensitivity;
+                    patch_value *= mouse_sensitivity_settings.third_person_mouse_aim_sensitivity;
                 }
                 else
                 {
-                    patch_value *= third_person_mouse_look_sensitivity;
+                    patch_value *= mouse_sensitivity_settings.third_person_mouse_look_sensitivity;
                 }
 
                 if (is_free_aiming && core_value == 0)
                 {
-                    patch_value *= core_empty_scale;
+                    patch_value *= kCoreEmptyScale;
                 }
-                PatchAddress(reinterpret_cast<void*>(base_address + third_person_scale_offset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
+                PatchAddress(reinterpret_cast<void*>(base_address + kThirdPersonScaleOffset), reinterpret_cast<const void*>(&patch_value), sizeof(float));
             }
         }
         if (IsKeyDown(VK_F9))
