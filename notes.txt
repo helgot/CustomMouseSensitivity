@@ -1,0 +1,125 @@
+__int64 __fastcall sub_7FF7667D8CC0(__int64 a1)
+{
+  __int64 result; // rax
+  __int64 v3; // rax
+  _BYTE v4[16]; // [rsp+20h] [rbp-38h] BYREF
+  __int64 v5; // [rsp+30h] [rbp-28h] BYREF
+  _BYTE v6[32]; // [rsp+38h] [rbp-20h] BYREF
+  __int64 v7; // [rsp+60h] [rbp+8h] BYREF
+
+  if ( a1 )
+  {
+    sub_7FF7667C5744(&v5);
+    v7 = 0LL;
+    v3 = sub_7FF7667C425C(v4, a1, 0LL);
+    result = sub_7FF7667D8D38(v6, v3, &v7);
+    if ( v6[16] )
+    {
+      result = v5;
+      *(_DWORD *)(v5 + 936) &= ~2u;
+    }
+  }
+  else
+  {
+    *(_DWORD *)sub_7FF7667E0620() = 22;
+    return sub_7FF7667D9C64();
+  }
+  return result;
+}
+__int64 __fastcall sub_7FF7667D964C(__int64 a1)
+{
+  return sub_7FF7667D8CC0(a1, 0LL);
+}
+
+char __fastcall sub_7FF765EBC6EC(__int64 a1, float *a2)
+{
+  _BYTE *v2; // rcx
+  double v4; // xmm0_8
+  char result; // al
+  float v6; // xmm1_4
+
+  v2 = *(_BYTE **)(a1 + 8);
+  if ( !v2 || !*v2 )
+    return 0;
+  v4 = sub_7FF7667D964C();
+  result = 1;
+  v6 = v4;
+  *a2 = v6;
+  return result;
+}
+
+__int64 __fastcall sub_7FF763CB23E4(float *a1)
+{
+  __int64 result; // rax
+  float v3; // xmm0_4
+  float v4; // [rsp+38h] [rbp+10h] BYREF
+
+  v4 = -1.0;
+  result = sub_7FF765EBC6EC(&unk_7FF767821C78, &v4);
+  v3 = v4;
+  if ( !(_BYTE)result )
+  {
+LABEL_6:
+    if ( v3 <= 0.000001 )
+      return result;
+    goto LABEL_7;
+  }
+  if ( v4 >= 200.0 )
+  {
+    if ( v4 > 2000.0 )
+      v3 = 2000.0;
+    goto LABEL_6;
+  }
+  v3 = 200.0;
+LABEL_7:
+  *a1 = v3 * 0.0049999999;
+  return result;
+}
+
+float __fastcall sub_7FF763CCDEA8(__int64 a1)
+{
+  float v1; // xmm0_4
+  float v2; // xmm1_4
+  float v3; // xmm1_4
+  float v4; // xmm2_4
+  float v6; // [rsp+30h] [rbp+8h] BYREF
+
+  v1 = 0.0;
+  v2 = (float)dword_7FF767293128 * 0.050000001;
+  if ( v2 >= 0.0 )
+    v3 = fminf(v2, 1.0);
+  else
+    v3 = 0.0;
+  v4 = (float)dword_7FF76729312C * 0.050000001;
+  if ( v4 >= 0.0 )
+    v1 = fminf(v4, 1.0);
+  v6 = (float)((float)(v1 - v3) * *(float *)(a1 + 48)) + v3;
+  sub_7FF763CB23E4(&v6);
+  return v6;
+}
+
+
+__int64 __fastcall sub_7FF763CB5E18(__int64 a1, __int64 a2, float a3, float a4)
+{
+  double v5; // xmm0_8
+  float *v6; // rax
+  float v7; // xmm4_4
+  float v8; // xmm1_4
+  float v10; // [rsp+60h] [rbp+18h] BYREF
+  float v11; // [rsp+68h] [rbp+20h] BYREF
+
+  *(float *)(a1 + 80) = a3;
+  *(float *)(a1 + 84) = a4;
+  v5 = sub_7FF763CCDEA8(); // Get a nomial value for this return value. 
+  v6 = *(float **)(a1 + 40);
+  v7 = *(float *)&v5;
+  *(float *)&v5 = (float)((float)((float)((float)(v6[14] - v6[13]) * *(float *)&v5) + v6[13]) * 0.017453292)
+                * 0.011175; 
+  v10 = (float)((float)((float)((float)(v6[12] - v6[11]) * v7) + v6[11]) * 0.017453292) * 0.011175;
+  v11 = *(float *)&v5;
+  sub_7FF763CB1B78(&v10, &v11);
+  v8 = v11 * a4;
+  *(float *)(a1 + 88) = v10 * a3;
+  *(float *)(a1 + 92) = v8;
+  return sub_7FF763CB15A8(a1);
+}
