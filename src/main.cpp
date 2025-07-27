@@ -1,10 +1,9 @@
 #include <Windows.h>
 #include "mod.h"
-#include <print>
 
 DWORD WINAPI InitializeModThread(LPVOID hModule)
 {
-    Mod::GetInstance().Start();
+    CustomSensitivity::Mod::GetInstance().Start();
     return 0;
 }
 
@@ -27,7 +26,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD fdwReason, LPVOID lpvReversed) {
         }
         
         case DLL_PROCESS_DETACH:
-        Mod::GetInstance().Shutdown();
+        CustomSensitivity::Mod::GetInstance().Shutdown();
         break;
     }
     return TRUE;

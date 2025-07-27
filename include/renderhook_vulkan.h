@@ -11,8 +11,8 @@
 class RenderHookVulkan : public IRenderHook
 {
 public:
-	RenderHookVulkan();
 	// Interface methods:
+	RenderHookVulkan();
 	~RenderHookVulkan();
 	void Shutdown() override;
 	void OnPresent() override;

@@ -28,7 +28,7 @@ add_library(CustomSensitivity SHARED
     src/logger.cpp
     src/mod.cpp
     src/renderhook_vulkan.cpp
-    src/script.cpp
+    src/config.cpp
     third-party/imgui/imgui.cpp
     third-party/imgui/imgui_draw.cpp
     third-party/imgui/imgui_widgets.cpp
