@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <ctime>
 #include <vector>  
+
 Logger& Logger::getInstance() {
     static Logger instance;
     return instance;

@@ -15,59 +15,42 @@
 
 namespace Mod
 {
-    struct ControlConfig
+    struct Config
     {
         float first_person_sensitivity = 1.0f;
         float first_person_aim_scale = 1.0f;
         float third_person_sensitivity = 1.0f;
         float third_person_aim_scale = 1.0f;
+        bool scale_first_person_sensitivity_with_fov = true;
+        bool show_menu_on_start_up = true;
     };
 
-    struct Config
-    {
-        ControlConfig mouse;
-        ControlConfig controller;
-        bool scale_first_person_sensitivity_with_fov = true;
-    };
     constexpr float kMinSliderValue = 0.0f;
     constexpr float kMaxSliderValue = 10.0f;
     constexpr float kDefaultValue = 1.0f; 
     constexpr std::string_view kConfigFileName = "CustomSensitivity.json";
 
-    void to_json(nlohmann::json& j, const ControlConfig& config)
+    void to_json(nlohmann::json& j, const Config& config)
     {
         j = {
             { "first_person_sensitivity", config.first_person_sensitivity },
             { "first_person_aim_scale", config.first_person_aim_scale },
             { "third_person_sensitivity", config.third_person_sensitivity },
-            { "third_person_aim_scale", config.third_person_aim_scale }
-        };
-    }
-
-    void from_json(const nlohmann::json& j, ControlConfig& config)
-    {
-        j.at("first_person_sensitivity").get_to(config.first_person_sensitivity);
-        j.at("first_person_aim_scale").get_to(config.first_person_aim_scale);
-        j.at("third_person_sensitivity").get_to(config.third_person_sensitivity);
-        j.at("third_person_aim_scale").get_to(config.third_person_aim_scale);
-    }
-
-    void to_json(nlohmann::json& j, const Config& config)
-    {
-        j = {
-            { "mouse", config.mouse },
-            { "controller", config.controller },
-            { "scale_first_person_sensitivity_with_fov", config.scale_first_person_sensitivity_with_fov }
+            { "third_person_aim_scale", config.third_person_aim_scale },
+            { "scale_first_person_sensitivity_with_fov", config.scale_first_person_sensitivity_with_fov },
+            { "show_menu_on_start_up", config.show_menu_on_start_up}
         };
     }
 
     void from_json(const nlohmann::json& j, Config& config)
     {
-        j.at("mouse").get_to(config.mouse);
-        j.at("controller").get_to(config.controller);
+        j.at("first_person_sensitivity").get_to(config.first_person_sensitivity);
+        j.at("first_person_aim_scale").get_to(config.first_person_aim_scale);
+        j.at("third_person_sensitivity").get_to(config.third_person_sensitivity);
+        j.at("third_person_aim_scale").get_to(config.third_person_aim_scale);
         j.at("scale_first_person_sensitivity_with_fov").get_to(config.scale_first_person_sensitivity_with_fov);
+        j.at("show_menu_on_start_up").get_to(config.show_menu_on_start_up);
     }
-
 
     bool SaveConfigToFile(const Mod::Config& config, std::string_view filepath)
     {
@@ -116,22 +99,15 @@ namespace GameData
     uintptr_t thirdPersonHookAddress = 0;
     uintptr_t firstPersonHookAddress = 0;
     uintptr_t fov_address = 0;
+    bool show_menu = true;
 
     Mod::Config config {
-        .mouse = {
-            .first_person_sensitivity = 1.0f,
-            .first_person_aim_scale = 1.0f,
-            .third_person_sensitivity = 1.0f,
-            .third_person_aim_scale = 1.0f,
-        },
-        .controller = {
-            .first_person_sensitivity = 1.0f,
-            .first_person_aim_scale = 1.0f,
-            .third_person_sensitivity = 1.0f,
-            .third_person_aim_scale = 1.0f,
-        },
-
+        .first_person_sensitivity = 1.0f,
+        .first_person_aim_scale = 1.0f,
+        .third_person_sensitivity = 1.0f,
+        .third_person_aim_scale = 1.0f,
         .scale_first_person_sensitivity_with_fov = true,
+        .show_menu_on_start_up = true,
     };
    
     constexpr float base_first_person_fov = 55.0f;
@@ -153,8 +129,6 @@ void PrintMap(const std::unordered_map<std::string_view, T>& map)
         ImGui::Text("map is null.");
         return;
     }
-
-    ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
 
     for (const auto& [key, value] : map)
     {
@@ -183,16 +157,17 @@ void PrintMap(const std::unordered_map<std::string_view, T>& map)
             ImGui::Text("   %s: [unsupported type]", key.data());
         }
     }
-
-    ImGui::PopFont();
 }
 
-void DrawControlConfig(Mod::ControlConfig& config)
+void DrawControlConfig(Mod::Config& config)
 {
     ImGui::SliderFloat("First-Person Sensitivity", &config.first_person_sensitivity, Mod::kMinSliderValue, Mod::kMaxSliderValue);
     ImGui::SliderFloat("First-Person Aim Scale", &config.first_person_aim_scale, Mod::kMinSliderValue, Mod::kMaxSliderValue);
     ImGui::SliderFloat("Third-Person Sensitivity", &config.third_person_sensitivity, Mod::kMinSliderValue, Mod::kMaxSliderValue);
     ImGui::SliderFloat("Third-Person Aim Scale", &config.third_person_aim_scale, Mod::kMinSliderValue, Mod::kMaxSliderValue);
+    ImGui::Checkbox("Scale First-Person Sensitivity With FOV", &config.scale_first_person_sensitivity_with_fov);
+    ImGui::Checkbox("Show Menu On Start-up ", &GameData::config.show_menu_on_start_up);
+
 }
 
 void __fastcall ImGuiDrawConfigManagement()
@@ -217,9 +192,11 @@ void __fastcall ImGuiDrawConfigManagement()
         Mod::LoadDefault(GameData::config);
     }
 }
+
 void DrawDebug()
 {
-
+    ImGui::Text("FOV: %0.2f", *reinterpret_cast<float*>(GameData::fov_address));
+    ImGui::Separator();
     ImGui::Text("Debug Probes:");
     ImGui::Separator();
     PrintMap(GameData::float_probe);
@@ -232,25 +209,22 @@ void DrawDebug()
     ImGui::Separator();
     PrintMap(GameData::int_probe);
     ImGui::Separator();
-    ImGui::Text("FOV: %0.2f", *reinterpret_cast<float*>(GameData::fov_address));
 }
+
 
 void __fastcall ImGuiDrawCommandsCallback()
 {
-    ImGui::Begin("Custom Sensitivity");
+    if (!GameData::show_menu)
+        return;
+
+    ImGui::Begin("Custom Sensitivity (Display Menu Toggle: F10)");
     ImGuiDrawConfigManagement();
 
     if (ImGui::BeginTabBar("InputConfigTabs"))
     {
-        if (ImGui::BeginTabItem("Mouse"))
+        if (ImGui::BeginTabItem("Config"))
         {
-            DrawControlConfig(GameData::config.mouse);
-            ImGui::EndTabItem();
-        }
-
-        if (ImGui::BeginTabItem("Controller"))
-        {
-            DrawControlConfig(GameData::config.controller);
+            DrawControlConfig(GameData::config);
             ImGui::EndTabItem();
         }
 
@@ -260,13 +234,26 @@ void __fastcall ImGuiDrawCommandsCallback()
             ImGui::EndTabItem();
         }
 
-
         ImGui::EndTabBar();
     }
 
-    ImGui::Checkbox("Scale First-Person Sensitivity With FOV", &GameData::config.scale_first_person_sensitivity_with_fov);
     ImGui::End();
+}
 
+void __fastcall ImGuiHandleInputCallback()
+{
+    static bool F10PressedLastFrame = false;
+    bool F10PressedThisFrame = GetAsyncKeyState(VK_F10) & 0x8000;
+
+    if (F10PressedThisFrame && !F10PressedLastFrame)
+    {
+        GameData::show_menu= !GameData::show_menu;
+
+        ImGuiIO& io = ImGui::GetIO(); 
+        io.MouseDrawCursor = GameData::show_menu;
+    }
+
+    F10PressedLastFrame = F10PressedThisFrame;
 }
 
 namespace Target {
@@ -371,8 +358,8 @@ __int64 __fastcall ThirdPersonMouseSensitivity(int64_t a1, int64_t a2, float a3,
     v7 = v5;
 
     float aiming = *(float*)(a1 + 48); // 1.0f if aimed, 0.0f if not. (interpolated in transition)
-    float aiming_scale = 1 + aiming*(GameData::config.mouse.third_person_aim_scale - 1);
-    float scale = GameData::config.mouse.third_person_sensitivity * aiming_scale * GameData::third_person_quake_scale;
+    float aiming_scale = 1 + aiming*(GameData::config.third_person_aim_scale - 1);
+    float scale = GameData::config.third_person_sensitivity * aiming_scale * GameData::third_person_quake_scale;
 
     v8 = (float)((float)((float)((float)(v6[14] - v6[13]) * v5) + v6[13]) * 0.017453292) * *(float*)Target::dword_39806BC * scale; // y_scale
     v11 = (float)((float)((float)((float)(v6[12] - v6[11]) * v5) + v6[11]) * 0.017453292) * *(float*)Target::dword_39806BC * scale; // x_scale
@@ -430,10 +417,10 @@ void __fastcall FirstPersonMouseSensitivity(__int64 a1, __int64 a2, __int64 a3, 
     GameData::float_probe.insert({ "* (float*)Target::dword_39806FC", *(float*)Target::dword_39806FC });
 
     float aiming = 1.0f ? (*(BYTE*)(a2 + 211) & 8) == 0x8 : 0.0f; 
-    float aiming_scale = 1 + aiming*(GameData::config.mouse.first_person_aim_scale- 1);
+    float aiming_scale = 1 + aiming*(GameData::config.first_person_aim_scale- 1);
     // fov_scale applies a scaling to 'undo' the games scaling of the rotation it does some where else!
     float fov_scale = !GameData::config.scale_first_person_sensitivity_with_fov ? GameData::base_first_person_fov / *reinterpret_cast<float*>(GameData::fov_address) : 1.0f;
-    float scale = GameData::config.mouse.first_person_sensitivity * aiming_scale * fov_scale * GameData::first_person_quake_scale;
+    float scale = GameData::config.first_person_sensitivity * aiming_scale * fov_scale * GameData::first_person_quake_scale;
 
     // This fixes the scaling to be the consistent across the non-scoped and scoped modes.
     *(float*)(a1 + 84) = 190.0f; 
@@ -503,12 +490,40 @@ void HookGameFunctions()
     Target::qword_39ECE48 = (int64_t*)(GameData::baseAddress + 0x39ECE48);
         
     GameData::thirdPersonHookAddress = GameData::baseAddress + 0x395E18;
-    MH_CreateHook((LPVOID)GameData::thirdPersonHookAddress, &ThirdPersonMouseSensitivity, NULL);
-    MH_EnableHook((LPVOID)GameData::thirdPersonHookAddress);
-
+    if(MH_CreateHook((LPVOID)GameData::thirdPersonHookAddress, &ThirdPersonMouseSensitivity, NULL) == MH_OK)
+    {
+        LOG_INFO("%s: ThirdPersonMouseSensitivity hook created successfully.", __func__);
+    }
+    else {
+        LOG_ERROR("%s: ThirdPersonMouseSensitivity hook creation failed.", __func__);
+        return;
+    }
+    if(MH_EnableHook((LPVOID)GameData::thirdPersonHookAddress) == MH_OK)
+    {
+        LOG_INFO("%s: ThirdPersonMouseSensitivity hook enabled.", __func__);
+    }
+    else {
+        LOG_ERROR("%s: ThirdPersonMouseSensitivity hook enable failed", __func__);
+        return;
+    }
     GameData::firstPersonHookAddress = GameData::baseAddress + 0x395EE0;
-    MH_CreateHook((LPVOID)GameData::firstPersonHookAddress, &FirstPersonMouseSensitivity, NULL);
-    MH_EnableHook((LPVOID)GameData::firstPersonHookAddress);
+    if(MH_CreateHook((LPVOID)GameData::firstPersonHookAddress, &FirstPersonMouseSensitivity, NULL) == MH_OK)
+    {
+        LOG_INFO("%s: FirstPersonMouseSensitivity hook created successfully.", __func__);
+    }
+    else {
+        LOG_ERROR("%s: FirstPersonMouseSensitivity hook creation failed.", __func__);
+        return;
+    }
+    if(MH_EnableHook((LPVOID)GameData::firstPersonHookAddress) == MH_OK)
+    {
+        LOG_INFO("%s: FirstPersonMouseSensitivity hook enabled.", __func__);
+    }
+    else {
+        LOG_ERROR("%s: FirstPersonMouseSensitivity hook enable failed", __func__);
+        return;
+    }
+
 
     GameData::fov_address = GameData::baseAddress + 0x3EA0BE0;
 
@@ -518,6 +533,18 @@ void HookGameFunctions()
         Mod::LoadDefault(GameData::config);
         Mod::SaveConfigToFile(GameData::config, Mod::kConfigFileName);
     }
+
+
+    // Print the loaded configuration:
+    {
+        nlohmann::json json_print;
+        Mod::to_json(json_print, GameData::config);
+        std::string debug_json_print = json_print.dump();
+        LOG_INFO("Loaded Config: %s", debug_json_print.c_str());
+    }
+
+    GameData::show_menu = GameData::config.show_menu_on_start_up;
+
 }
 
 void UnhookGameFunctions()

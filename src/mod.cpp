@@ -15,7 +15,7 @@ Mod& Mod::GetInstance()
 Mod::Mod()
 {
     LOG_DEBUG("Mod instance created.");
-    Logger::getInstance().setLevel(LogLevel::L_DEBUG);
+    Logger::getInstance().setLevel(LogLevel::L_INFO);
     Logger::getInstance().setLogFile("CustomSensivitity.log");
     m_rendererHook = std::make_unique<RenderHookVulkan>();
 }
@@ -31,15 +31,26 @@ void Mod::Start()
     if (!m_rendererHook) return;
 
     m_rendererHook->SetGUICallback(ImGuiDrawCommandsCallback);
+    m_rendererHook->SetHandleInputCallback(ImGuiHandleInputCallback);
 
     if (MH_Initialize() != MH_OK)
     {
         LOG_ERROR("Failed to initialize MinHook.");
         return;
-    }
+    } 
+
     LOG_DEBUG("MinHook initialized successfully.");
 
-    m_rendererHook->HookGraphicsAPI();
+
+    if(!m_rendererHook->HookGraphicsAPI())
+    {
+        LOG_ERROR("Failed to Hook Graphics.");
+    }
+    else 
+    {
+        LOG_DEBUG("Graphics API Hooked successfully.");
+    } 
+
     HookGameFunctions();
 }
 

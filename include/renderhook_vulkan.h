@@ -16,9 +16,10 @@ public:
 	~RenderHookVulkan();
 	void Shutdown() override;
 	void OnPresent() override;
-	void HookGraphicsAPI() override;
+	bool HookGraphicsAPI() override;
 	void UnhookGraphicsAPI() override;
 	void SetGUICallback(GuiRenderCallback callback) override;
+	void SetHandleInputCallback(HandleInputCallback callback) override;
 
 private:	
 	bool HookVulkanFunction(HMODULE vulkanLib, const std::string& targetFunctionName, LPVOID detourFunction, LPVOID* ppOriginal);
@@ -76,6 +77,7 @@ private:
 
 
 	GuiRenderCallback m_guiCallback;
+	HandleInputCallback m_handleInputCallback;
 
 	// Win32 Objects:
 	HWND m_hWnd = nullptr;

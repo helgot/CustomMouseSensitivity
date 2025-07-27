@@ -5,9 +5,6 @@
 DWORD WINAPI InitializeModThread(LPVOID hModule)
 {
     Mod::GetInstance().Start();
-    std::string name = "test";
-    std::println("Hello, {}", name);
-    
     return 0;
 }
 

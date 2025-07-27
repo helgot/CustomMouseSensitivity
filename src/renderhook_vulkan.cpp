@@ -1,5 +1,6 @@
 #include "renderhook_vulkan.h"
 
+#include "i_renderhook.h"
 #include "logger.h"
 #include <MinHook.h>
 #include <imgui_impl_vulkan.h>
@@ -95,24 +96,25 @@ bool RenderHookVulkan::HookVulkanFunction(HMODULE vulkanLib, const std::string& 
     return true;
 }
 
-void RenderHookVulkan::HookGraphicsAPI()
+bool RenderHookVulkan::HookGraphicsAPI()
 {
     // Get the address of vulkan-1.dll
     HMODULE vulkanLib = GetModuleHandle("vulkan-1.dll");
     if (vulkanLib == NULL) {
         LOG_DEBUG("Failed to get handle for vulkan-1.dll!");
         MH_Uninitialize();
-        return;
+        return false;
     }
 
     if (!HookVulkanFunction(vulkanLib, "vkCreateInstance", RenderHookVulkan::Hooked_vkCreateInstance, (LPVOID*)&m_original_vkCreateInstance))
-        return;
+        return false;
     if (!HookVulkanFunction(vulkanLib, "vkCreateDevice", RenderHookVulkan::Hooked_vkCreateDevice, (LPVOID*)&m_original_vkCreateDevice))
-        return;
+        return false;
     if (!HookVulkanFunction(vulkanLib, "vkGetDeviceProcAddr", RenderHookVulkan::Hooked_vkGetDeviceProcAddr, (LPVOID*)&m_original_vkGetDeviceProcAddr))
-        return;
+        return false;
 
     LOG_DEBUG("Vulkan API hooks installed successfully.");
+    return true;
 }
 
 void RenderHookVulkan::UnhookGraphicsAPI()
@@ -221,15 +223,6 @@ void RenderHookVulkan::InitializeImGui()
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;  // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange; // Don't change mouse cursor
-
-    // Example: Show/hide based on a global boolean
-    static bool show_menu = true;
-    if (ImGui::IsKeyReleased(ImGuiKey_Insert)) {
-        show_menu = !show_menu;
-    }
-
-    // Let ImGui know if it should show its own cursor or let the game control it
-    io.MouseDrawCursor = show_menu;
 
     // 3. Setup Dear ImGui style
     ImGui::StyleColorsDark();
@@ -345,6 +338,7 @@ void RenderHookVulkan::DeinitializeImGui()
         m_imguiDescriptorPool = VK_NULL_HANDLE;
     }
 
+// Don't destroy the synchronisation primatives:
 //    if (m_renderCompleteSemaphore != VK_NULL_HANDLE) {
 //        vkDestroySemaphore(m_vkDevice, m_renderCompleteSemaphore, nullptr);
 //        m_renderCompleteSemaphore = VK_NULL_HANDLE;
@@ -354,8 +348,6 @@ void RenderHookVulkan::DeinitializeImGui()
 //        vkDestroyFence(m_vkDevice, m_renderFence, nullptr);
 //        m_renderFence = VK_NULL_HANDLE;
 //    }
-
-
 
     m_imguiInitialized = false;
     LOG_DEBUG("ImGui Vulkan backend shut down.");
@@ -379,7 +371,11 @@ LRESULT CALLBACK RenderHookVulkan::Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM w
         if (io.WantCaptureMouse || io.WantCaptureKeyboard) {
             return TRUE;
         }
+
     }
+
+    if(pThis->m_handleInputCallback)
+        pThis->m_handleInputCallback();
 
     // If we're here, it means ImGui did not want to capture the input,
     // so we should pass the message to the original window procedure.
@@ -414,7 +410,6 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
 
     if (pThis->m_imguiInitialized)
     {
-        LOG_DEBUG("%s: NewFrame start", __func__);
         // Start the Dear ImGui frame
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
@@ -535,7 +530,6 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
             submitInfo.signalSemaphoreCount = 1;
             submitInfo.pSignalSemaphores = &pThis->m_renderCompleteSemaphore;
 
-            LOG_DEBUG("%s: NewFrame submit to queue", __func__);
             vkQueueSubmit(queue, 1, &submitInfo, pThis->m_renderFence);
 
             // Free the command buffer after submission
@@ -715,6 +709,10 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
 
 void RenderHookVulkan::SetGUICallback(GuiRenderCallback callback) {
     m_guiCallback = std::move(callback);
+}
+
+void RenderHookVulkan::SetHandleInputCallback(HandleInputCallback callback) {
+    m_handleInputCallback = std::move(callback);
 }
 
 
