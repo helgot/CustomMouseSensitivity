@@ -1,4 +1,6 @@
 tmp/
-build/
+build
 .vs/
 bin/
+.cache/
+tasklist
