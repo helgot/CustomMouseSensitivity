@@ -1,6 +1,7 @@
 tmp/
-build
 .vs/
 bin/
+build/
 .cache/
+.vscode/
 tasklist
