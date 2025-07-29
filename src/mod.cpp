@@ -32,7 +32,7 @@ namespace CustomSensitivity
         if (!g_debugData.show_menu)
             return;
 
-        ImGui::Begin("Custom Sensitivity (Display Menu Toggle: F10)");
+        ImGui::Begin("Custom Sensitivity (Display Toggle: F10)");
         ImGuiDrawConfigManagementHelper(g_config);
 
         if (ImGui::BeginTabBar("InputConfigTabs"))
