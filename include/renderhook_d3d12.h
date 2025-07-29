@@ -1,7 +1,6 @@
 #pragma once
 #include "i_renderhook.h"
 
-
 class RenderHookD3D12 : public IRenderHook
 {
 public: 

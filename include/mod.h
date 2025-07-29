@@ -33,6 +33,7 @@ namespace CustomSensitivity
         void UnhookGameFunctions();
         bool CreateHooks();
         bool EnableHooks();
+        bool LoadConfig();
 
     private:
         std::vector<Hook> m_functionHooks;

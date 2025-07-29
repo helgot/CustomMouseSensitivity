@@ -14,6 +14,10 @@ void Logger::setLevel(LogLevel newLevel) {
     level = newLevel;
 }
 
+LogLevel Logger::getLevel() {
+    return level;
+}
+
 void Logger::setLogFile(const std::string& filename) {
     if (logFile.is_open()) {
         logFile.close();

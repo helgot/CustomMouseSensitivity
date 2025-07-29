@@ -1,6 +1,5 @@
 #include "config.h"
 
-#include "logger.h"
 
 namespace CustomSensitivity
 {
@@ -12,7 +11,9 @@ namespace CustomSensitivity
             { "third_person_sensitivity", config.third_person_sensitivity },
             { "third_person_aim_scale", config.third_person_aim_scale },
             { "scale_first_person_sensitivity_with_fov", config.scale_first_person_sensitivity_with_fov },
-            { "show_menu_on_start_up", config.show_menu_on_start_up}
+            { "show_menu_on_start_up", config.show_menu_on_start_up},
+            { "log_level", config.log_level}
+
         };
     }
 
@@ -24,6 +25,7 @@ namespace CustomSensitivity
         j.at("third_person_aim_scale").get_to(config.third_person_aim_scale);
         j.at("scale_first_person_sensitivity_with_fov").get_to(config.scale_first_person_sensitivity_with_fov);
         j.at("show_menu_on_start_up").get_to(config.show_menu_on_start_up);
+        j.at("log_level").get_to(config.log_level);
     }
 
     bool Config::SaveConfigToFile(std::string_view filepath)
@@ -52,6 +54,7 @@ namespace CustomSensitivity
             if (!file) 
             {
                 LoadDefault();
+                SaveConfigToFile(filepath);
                 return false;
             }
             nlohmann::json j;

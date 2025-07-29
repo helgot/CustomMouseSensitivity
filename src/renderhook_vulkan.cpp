@@ -10,6 +10,8 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg
 
 RenderHookVulkan* RenderHookVulkan::s_instance = nullptr;
 
+constexpr bool kVkEnableValidationLayers = false;
+
 RenderHookVulkan::RenderHookVulkan()
 {
 	s_instance = this;
@@ -390,156 +392,123 @@ LRESULT CALLBACK RenderHookVulkan::Hooked_WndProc(HWND hWnd, UINT uMsg, WPARAM w
 VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* pPresentInfo)
 {
     RenderHookVulkan* pThis = static_cast<RenderHookVulkan*>(s_instance);
-    if (!pThis)
-        LOG_DEBUG("%s: pThis is null!", __func__);
+    if (!pThis) return VK_ERROR_INITIALIZATION_FAILED;
 
-    
+    // --- (Initialization logic is fine) ---
     if (pThis->m_vkQueue == VK_NULL_HANDLE) {
         pThis->m_vkQueue = queue;
     }
-
-    if (pThis->m_vkQueue != queue)
-    {
-        LOG_DEBUG("%s, queues DO NOT match... BADNESS");
-    }
-
     if (!pThis->m_imguiInitialized) {
-        LOG_DEBUG("%s: InitializeImGui", __func__);
         pThis->InitializeImGui();
     }
 
-    if (pThis->m_imguiInitialized)
+    if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0)
     {
-        // Start the Dear ImGui frame
+        // --- (ImGui frame setup is fine) ---
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
-  
-
         ImGui::NewFrame();
-        // --- Your Debug UI Here ---
-         // Move to callback to render ImGui UI
         pThis->OnPresent();
-        // --- End Your Debug UI ---
         ImGui::Render();
 
         ImDrawData* draw_data = ImGui::GetDrawData();
+        uint32_t imageIndex = pPresentInfo->pImageIndices[0];
 
-        // Get the current swapchain image index
-        uint32_t imageIndex = pPresentInfo->pImageIndices[0]; // Assuming single swapchain for simplicity
+        // Ensure the command pool for this frame is ready
+        vkResetCommandPool(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 0);
 
-        // Render ImGui commands to the current swapchain image
-        {
-            VkClearValue clearValue{};
-            clearValue.color.float32[0] = 0.0f;
-            clearValue.color.float32[1] = 0.0f;
-            clearValue.color.float32[2] = 0.0f;
-            clearValue.color.float32[3] = 1.0f;
+        VkCommandBufferAllocateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        allocInfo.commandPool = pThis->m_imguiCommandPools[imageIndex];
+        allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        allocInfo.commandBufferCount = 1;
 
-            VkRenderPassBeginInfo renderPassBeginInfo{};
-            renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-            renderPassBeginInfo.renderPass = pThis->m_imguiRenderPass;
-            renderPassBeginInfo.framebuffer = pThis->m_imguiFramebuffers[imageIndex]; // Use the framebuffer for the current swapchain image
-            renderPassBeginInfo.renderArea.offset = { 0, 0 };
-            renderPassBeginInfo.renderArea.extent = pThis->m_swapchainExtent;
-            renderPassBeginInfo.clearValueCount = 1;
-            renderPassBeginInfo.pClearValues = &clearValue;
-
-            // Allocate and record command buffer for ImGui
-            VkCommandBufferAllocateInfo allocInfo{};
-            allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-            allocInfo.commandPool = pThis->m_imguiCommandPools[imageIndex]; // Use the command pool for this image index
-            allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-            allocInfo.commandBufferCount = 1;
-
-            VkCommandBuffer imguiCmdBuffer;
-            if (vkAllocateCommandBuffers(pThis->m_vkDevice, &allocInfo, &imguiCmdBuffer) != VK_SUCCESS) {
-                LOG_DEBUG("Error: Failed to allocate ImGui command buffer!");
-                return pThis->m_original_vkQueuePresentKHR(queue, pPresentInfo); // Call original and return on error
-            }
-
-            VkCommandBufferBeginInfo beginInfo{};
-            beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-            vkBeginCommandBuffer(imguiCmdBuffer, &beginInfo);
-
-            // Transition image layout for rendering
-            VkImageMemoryBarrier imageMemoryBarrier{};
-            imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-            imageMemoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT; // Assuming previous stage was read
-            imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-            imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-            imageMemoryBarrier.image = pThis->m_swapchainImages[imageIndex];
-            imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            imageMemoryBarrier.subresourceRange.baseMipLevel = 0;
-            imageMemoryBarrier.subresourceRange.levelCount = 1;
-            imageMemoryBarrier.subresourceRange.baseArrayLayer = 0;
-            imageMemoryBarrier.subresourceRange.layerCount = 1;
-
-            vkCmdPipelineBarrier(
-                imguiCmdBuffer,
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // Source stage
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // Destination stage
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &imageMemoryBarrier
-            );
-
-            // Actually begin the render pass
-            vkCmdBeginRenderPass(imguiCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
-            ImGui_ImplVulkan_RenderDrawData(draw_data, imguiCmdBuffer);
-            vkCmdEndRenderPass(imguiCmdBuffer);
-
-
-            // Transition image layout back to present
-            imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-            imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-            imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-            imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-
-            vkCmdPipelineBarrier(
-                imguiCmdBuffer,
-                VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, // Source stage
-                VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, // Destination stage
-                0,
-                0, nullptr,
-                0, nullptr,
-                1, &imageMemoryBarrier
-            );
-
-            vkEndCommandBuffer(imguiCmdBuffer);
-
-
-            // Submit command buffer
-            VkSubmitInfo submitInfo{};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &imguiCmdBuffer;
-
-            // Use a semaphore to signal completion for the present queue
-            VkSemaphore presentSemaphore = pPresentInfo->pWaitSemaphores[0]; // Use the game's semaphore
-            VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-            submitInfo.waitSemaphoreCount = 1;
-            submitInfo.pWaitSemaphores = &presentSemaphore;
-            submitInfo.pWaitDstStageMask = &waitStage;
-
-            // Signal our own semaphore for the present call
-            submitInfo.signalSemaphoreCount = 1;
-            submitInfo.pSignalSemaphores = &pThis->m_renderCompleteSemaphore;
-
-            vkQueueSubmit(queue, 1, &submitInfo, pThis->m_renderFence);
-
-            // Free the command buffer after submission
-            vkFreeCommandBuffers(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 1, &imguiCmdBuffer);
+        VkCommandBuffer imguiCmdBuffer;
+        if (vkAllocateCommandBuffers(pThis->m_vkDevice, &allocInfo, &imguiCmdBuffer) != VK_SUCCESS) {
+            LOG_DEBUG("Error: Failed to allocate ImGui command buffer!");
+            return pThis->m_original_vkQueuePresentKHR(queue, pPresentInfo);
         }
 
+        VkCommandBufferBeginInfo beginInfo{};
+        beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+        vkBeginCommandBuffer(imguiCmdBuffer, &beginInfo);
+
+        // Transition image layout for rendering
+        VkImageMemoryBarrier imageMemoryBarrier{};
+        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        imageMemoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        imageMemoryBarrier.image = pThis->m_swapchainImages[imageIndex];
+        imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageMemoryBarrier.subresourceRange.levelCount = 1;
+        imageMemoryBarrier.subresourceRange.layerCount = 1;
+
+        vkCmdPipelineBarrier(imguiCmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+        
+        // Begin render pass for ImGui
+        VkRenderPassBeginInfo renderPassBeginInfo{};
+        renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        renderPassBeginInfo.renderPass = pThis->m_imguiRenderPass;
+        renderPassBeginInfo.framebuffer = pThis->m_imguiFramebuffers[imageIndex];
+        renderPassBeginInfo.renderArea.extent = pThis->m_swapchainExtent;
+        // ... (rest of renderPassBeginInfo setup) ...
+        vkCmdBeginRenderPass(imguiCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
+        ImGui_ImplVulkan_RenderDrawData(draw_data, imguiCmdBuffer);
+        vkCmdEndRenderPass(imguiCmdBuffer);
+        
+        // Transition image layout back to present
+        imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
+        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        vkCmdPipelineBarrier(imguiCmdBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
+
+        vkEndCommandBuffer(imguiCmdBuffer);
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        // WAIT on the game's semaphore before drawing our UI
+        VkSemaphore gameRenderSemaphore = pPresentInfo->pWaitSemaphores[0];
+        VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        submitInfo.waitSemaphoreCount = 1;
+        submitInfo.pWaitSemaphores = &gameRenderSemaphore;
+        submitInfo.pWaitDstStageMask = &waitStage;
+
+        // Specify our command buffer to execute
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &imguiCmdBuffer;
+
+        // SIGNAL our own semaphore when our UI is done drawing
+        submitInfo.signalSemaphoreCount = 1;
+        submitInfo.pSignalSemaphores = &pThis->m_renderCompleteSemaphore;
+
+        // Submit to the queue and use a fence to know when it's done
+        vkResetFences(pThis->m_vkDevice, 1, &pThis->m_renderFence);
+        vkQueueSubmit(queue, 1, &submitInfo, pThis->m_renderFence);
+
+        // CRITICAL: Wait for our submission to finish before proceeding
+        vkWaitForFences(pThis->m_vkDevice, 1, &pThis->m_renderFence, VK_TRUE, UINT64_MAX);
+        
+        // Now it's safe to free the command buffer. It is no longer in use.
+        vkFreeCommandBuffers(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 1, &imguiCmdBuffer);
+    }
+    
+    // We must now call the original present function, but tell it to wait on OUR semaphore.
+    VkPresentInfoKHR modifiedPresentInfo = *pPresentInfo;
+    if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0)
+    {
+        modifiedPresentInfo.waitSemaphoreCount = 1;
+        modifiedPresentInfo.pWaitSemaphores = &pThis->m_renderCompleteSemaphore;
     }
 
-    // Call the original vkQueuePresentKHR;
-    return pThis->m_original_vkQueuePresentKHR(queue, pPresentInfo);
+    // Call the original vkQueuePresentKHR with the correctly chained semaphore
+    return pThis->m_original_vkQueuePresentKHR(queue, &modifiedPresentInfo);
 }
 
 VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
@@ -698,14 +667,43 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
 {
     LOG_DEBUG("%s: Called.", __func__);
     RenderHookVulkan* pThis = static_cast<RenderHookVulkan*>(s_instance);
-	VkResult result = pThis->m_original_vkCreateInstance(pCreateInfo, pAllocator, pInstance);
+
+    // Copy the original CreateInfo so we can modify it
+    VkInstanceCreateInfo modifiedCreateInfo = *pCreateInfo;
+
+    // Check whether validation layer is already in the list
+    if (kVkEnableValidationLayers)
+    {
+        // Copy the original enabled layers, if any
+        std::vector<const char*> enabledLayers;
+        if (pCreateInfo->enabledLayerCount > 0) {
+            enabledLayers.assign(pCreateInfo->ppEnabledLayerNames,
+                                 pCreateInfo->ppEnabledLayerNames + pCreateInfo->enabledLayerCount);
+        }
+
+        const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
+        auto it = std::find(enabledLayers.begin(), enabledLayers.end(), validationLayerName);
+        if (it == enabledLayers.end()) {
+            enabledLayers.push_back(validationLayerName);
+            LOG_DEBUG("%s: Injected validation layer.", __func__);
+        }
+
+        // Update the modifiedCreateInfo to include new layers
+        modifiedCreateInfo.enabledLayerCount = static_cast<uint32_t>(enabledLayers.size());
+        modifiedCreateInfo.ppEnabledLayerNames = enabledLayers.data();
+    }
+
+    // Call original function with modified CreateInfo
+    VkResult result = pThis->m_original_vkCreateInstance(&modifiedCreateInfo, pAllocator, pInstance);
+
     if (result == VK_SUCCESS) {
         pThis->m_vkInstance = *pInstance;
         LOG_DEBUG("%s: Captured VkInstance: %p", __func__, (void*)pThis->m_vkInstance);
-
     }
+
     return result;
 }
+
 
 void RenderHookVulkan::SetGUICallback(GuiRenderCallback callback) {
     m_guiCallback = std::move(callback);

@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(MyProject VERSION 1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE RELEASE)
@@ -29,6 +29,7 @@ add_library(CustomSensitivity SHARED
     src/mod.cpp
     src/renderhook_vulkan.cpp
     src/config.cpp
+    src/ui.cpp
     third-party/imgui/imgui.cpp
     third-party/imgui/imgui_draw.cpp
     third-party/imgui/imgui_widgets.cpp
