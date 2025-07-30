@@ -447,7 +447,7 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         renderPassBeginInfo.renderPass = pThis->m_imguiRenderPass;
         renderPassBeginInfo.framebuffer = pThis->m_imguiFramebuffers[imageIndex];
         renderPassBeginInfo.renderArea.extent = pThis->m_swapchainExtent;
-        // ... (rest of renderPassBeginInfo setup) ...
+
         vkCmdBeginRenderPass(imguiCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         ImGui_ImplVulkan_RenderDrawData(draw_data, imguiCmdBuffer);
         vkCmdEndRenderPass(imguiCmdBuffer);
