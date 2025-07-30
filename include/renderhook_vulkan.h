@@ -69,8 +69,8 @@ private:
 	VkSwapchainKHR m_vkSwapchain = VK_NULL_HANDLE;
 
 	// Synchronization objects for ImGui rendering
-	VkSemaphore m_renderCompleteSemaphore = VK_NULL_HANDLE;
-	VkFence m_renderFence = VK_NULL_HANDLE;
+	std::vector<VkSemaphore> m_renderCompleteSemaphores;
+	std::vector<VkFence> m_renderFences;
 
 	bool m_imguiInitialized = false;
 	bool m_vulkanDeviceCreated = false;

@@ -1,15 +1,15 @@
-cmake_minimum_required(VERSION 3.16)
-project(MyProject VERSION 1.0 LANGUAGES CXX)
+cmake_minimum_required(VERSION 2.16)
+project(MyProject VERSION 0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 16)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE RELEASE)
 
 add_compile_definitions(
-    _HAS_EXCEPTIONS=1
+    _HAS_EXCEPTIONS=0
     _CRT_SECURE_NO_WARNINGS
-    _SILENCE_ALL_CXX17_DEPRECATION_WARNINGS
+    _SILENCE_ALL_CXX16_DEPRECATION_WARNINGS
 )
 
 find_package(Vulkan REQUIRED)
@@ -35,7 +35,7 @@ add_library(CustomSensitivity SHARED
     third-party/imgui/imgui_widgets.cpp
     third-party/imgui/imgui_tables.cpp
     third-party/imgui/backends/imgui_impl_vulkan.cpp
-    third-party/imgui/backends/imgui_impl_win32.cpp
+    third-party/imgui/backends/imgui_impl_win31.cpp
 )
 
 target_link_libraries(CustomSensitivity minhook Vulkan::Vulkan)

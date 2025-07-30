@@ -136,12 +136,15 @@ VkResult RenderHookVulkan::CreateRenderPass()
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format = m_swapchainImageFormat;
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; // Load existing content
+    // We MUST load the game's content to render over it.
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD; 
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // Start in present layout
-    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;   // End in present layout
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; 
+
+    // Tell the pass to transition the image to the layout needed for presentation when we are done.
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
@@ -340,16 +343,16 @@ void RenderHookVulkan::DeinitializeImGui()
         m_imguiDescriptorPool = VK_NULL_HANDLE;
     }
 
-// Don't destroy the synchronisation primatives:
-//    if (m_renderCompleteSemaphore != VK_NULL_HANDLE) {
-//        vkDestroySemaphore(m_vkDevice, m_renderCompleteSemaphore, nullptr);
-//        m_renderCompleteSemaphore = VK_NULL_HANDLE;
-//    }
-//
-//    if (m_renderFence != VK_NULL_HANDLE) {
-//        vkDestroyFence(m_vkDevice, m_renderFence, nullptr);
-//        m_renderFence = VK_NULL_HANDLE;
-//    }
+    for (auto& semaphore : m_renderCompleteSemaphores) {
+        vkDestroySemaphore(m_vkDevice, semaphore, nullptr);
+    }
+    m_renderCompleteSemaphores.clear();
+
+    for (auto& fence : m_renderFences) {
+        vkDestroyFence(m_vkDevice, fence, nullptr);
+    }
+    m_renderFences.clear();
+
 
     m_imguiInitialized = false;
     LOG_DEBUG("ImGui Vulkan backend shut down.");
@@ -401,10 +404,10 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
     if (!pThis->m_imguiInitialized) {
         pThis->InitializeImGui();
     }
+    VkPresentInfoKHR modifiedPresentInfo = *pPresentInfo;
 
     if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0)
     {
-        // --- (ImGui frame setup is fine) ---
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
@@ -413,6 +416,10 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
 
         ImDrawData* draw_data = ImGui::GetDrawData();
         uint32_t imageIndex = pPresentInfo->pImageIndices[0];
+
+        // Get the correct fence and semaphore for the current frame
+        VkFence currentFrameFence = pThis->m_renderFences[imageIndex];
+        VkSemaphore currentFrameSemaphore = pThis->m_renderCompleteSemaphores[imageIndex];
 
         // Ensure the command pool for this frame is ready
         vkResetCommandPool(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 0);
@@ -432,24 +439,8 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
         vkBeginCommandBuffer(imguiCmdBuffer, &beginInfo);
-
-        // Transition image layout for rendering
-        VkImageMemoryBarrier imageMemoryBarrier{};
-        imageMemoryBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        imageMemoryBarrier.srcAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        imageMemoryBarrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        imageMemoryBarrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        imageMemoryBarrier.image = pThis->m_swapchainImages[imageIndex];
-        imageMemoryBarrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        imageMemoryBarrier.subresourceRange.levelCount = 1;
-        imageMemoryBarrier.subresourceRange.layerCount = 1;
-
-        vkCmdPipelineBarrier(imguiCmdBuffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
-        
         // Begin render pass for ImGui
         VkRenderPassBeginInfo renderPassBeginInfo{};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -460,51 +451,31 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         vkCmdBeginRenderPass(imguiCmdBuffer, &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
         ImGui_ImplVulkan_RenderDrawData(draw_data, imguiCmdBuffer);
         vkCmdEndRenderPass(imguiCmdBuffer);
-        
-        // Transition image layout back to present
-        imageMemoryBarrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-        imageMemoryBarrier.dstAccessMask = VK_ACCESS_MEMORY_READ_BIT;
-        imageMemoryBarrier.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-        imageMemoryBarrier.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-        vkCmdPipelineBarrier(imguiCmdBuffer, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr, 0, nullptr, 1, &imageMemoryBarrier);
-
         vkEndCommandBuffer(imguiCmdBuffer);
 
         VkSubmitInfo submitInfo{};
         submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-        // WAIT on the game's semaphore before drawing our UI
         VkSemaphore gameRenderSemaphore = pPresentInfo->pWaitSemaphores[0];
         VkPipelineStageFlags waitStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         submitInfo.waitSemaphoreCount = 1;
         submitInfo.pWaitSemaphores = &gameRenderSemaphore;
         submitInfo.pWaitDstStageMask = &waitStage;
 
-        // Specify our command buffer to execute
         submitInfo.commandBufferCount = 1;
         submitInfo.pCommandBuffers = &imguiCmdBuffer;
 
-        // SIGNAL our own semaphore when our UI is done drawing
         submitInfo.signalSemaphoreCount = 1;
-        submitInfo.pSignalSemaphores = &pThis->m_renderCompleteSemaphore;
+        submitInfo.pSignalSemaphores = &currentFrameSemaphore;
 
-        // Submit to the queue and use a fence to know when it's done
-        vkResetFences(pThis->m_vkDevice, 1, &pThis->m_renderFence);
-        vkQueueSubmit(queue, 1, &submitInfo, pThis->m_renderFence);
+        vkResetFences(pThis->m_vkDevice, 1, &currentFrameFence);
+        vkQueueSubmit(queue, 1, &submitInfo, currentFrameFence);
 
-        // CRITICAL: Wait for our submission to finish before proceeding
-        vkWaitForFences(pThis->m_vkDevice, 1, &pThis->m_renderFence, VK_TRUE, UINT64_MAX);
-        
-        // Now it's safe to free the command buffer. It is no longer in use.
+        vkWaitForFences(pThis->m_vkDevice, 1, &currentFrameFence, VK_TRUE, UINT64_MAX);
+
         vkFreeCommandBuffers(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 1, &imguiCmdBuffer);
-    }
     
-    // We must now call the original present function, but tell it to wait on OUR semaphore.
-    VkPresentInfoKHR modifiedPresentInfo = *pPresentInfo;
-    if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0)
-    {
-        modifiedPresentInfo.waitSemaphoreCount = 1;
-        modifiedPresentInfo.pWaitSemaphores = &pThis->m_renderCompleteSemaphore;
+        modifiedPresentInfo.pWaitSemaphores = &currentFrameSemaphore;
     }
 
     // Call the original vkQueuePresentKHR with the correctly chained semaphore
@@ -515,8 +486,22 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateDevice(VkPhysicalDevice phys
 {
     LOG_DEBUG("%s: Called.", __func__);
     RenderHookVulkan* pThis = static_cast<RenderHookVulkan*>(s_instance);
-	VkResult result = pThis->m_original_vkCreateDevice(physicalDevice, pCreateInfo, pAllocator, pDevice);
+    VkPhysicalDeviceTimelineSemaphoreFeatures timelineSemaphoreFeatures{};
+    timelineSemaphoreFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES;
+    timelineSemaphoreFeatures.timelineSemaphore = VK_TRUE;
 
+    // Important: You must chain this structure to the pNext pointer of VkDeviceCreateInfo.
+    // Since we don't know what might already be in the pNext chain, we must preserve it.
+    timelineSemaphoreFeatures.pNext = (void*)pCreateInfo->pNext; // Preserve existing pNext chain
+
+    // Create a modifiable copy of the original create info.
+    VkDeviceCreateInfo modifiedCreateInfo = *pCreateInfo;
+
+    // Point its pNext to our new feature structure.
+    modifiedCreateInfo.pNext = &timelineSemaphoreFeatures;
+
+    // Call the original function with the MODIFIED create info.
+    VkResult result = pThis->m_original_vkCreateDevice(physicalDevice, &modifiedCreateInfo, pAllocator, pDevice);
     if (result == VK_SUCCESS) {
         pThis->m_vkPhysicalDevice = physicalDevice;
         pThis->m_vkDevice = *pDevice;
@@ -531,26 +516,6 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateDevice(VkPhysicalDevice phys
         uint32_t queueFamilyIndex = 0; // Assuming the first queue family supports graphics and present
         vkGetDeviceQueue(pThis->m_vkDevice, queueFamilyIndex, 0, &pThis->m_vkQueue);
         LOG_DEBUG("%s: Captured VkQueue: %p", __func__, (void*)pThis->m_vkQueue);
-
-        // Create synchronization objects for ImGui
-        VkSemaphoreCreateInfo semaphoreInfo{};
-        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-        if (vkCreateSemaphore(pThis->m_vkDevice, &semaphoreInfo, nullptr, &pThis->m_renderCompleteSemaphore) != VK_SUCCESS) {
-            LOG_DEBUG("%s: Error: Failed to create render complete semaphore!", __func__);
-        }
-
-        VkFenceCreateInfo fenceInfo{};
-        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Start in signaled state
-        if (vkCreateFence(pThis->m_vkDevice, &fenceInfo, nullptr, &pThis->m_renderFence) != VK_SUCCESS) {
-            LOG_DEBUG("%s: Error: Failed to create render fence!", __func__);
-        }
-
-        // Removed dummy swapchain setup. Swapchain images, views, framebuffers, and command pools
-        // will now be created in Hooked_vkCreateSwapchainKHR.
-
-        // InitImGuiVulkan will now be called from Hooked_vkCreateSwapchainKHR
-        // to ensure all swapchain-related information is available.
     }
     return result;
 }
@@ -589,6 +554,24 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateSwapchainKHR(VkDevice device
         pThis->m_imguiFramebuffers.resize(imageCount);
         pThis->m_imguiCommandPools.resize(imageCount);
 
+        // In Hooked_vkCreateSwapchainKHR, after resizing the other vectors...
+        pThis->m_renderCompleteSemaphores.resize(imageCount);
+        pThis->m_renderFences.resize(imageCount);
+
+        VkSemaphoreCreateInfo semaphoreInfo{};
+        semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        VkFenceCreateInfo fenceInfo{};
+        fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT; // Create signaled for first use
+
+        for (uint32_t i = 0; i < imageCount; ++i) {
+            if (vkCreateSemaphore(device, &semaphoreInfo, nullptr, &pThis->m_renderCompleteSemaphores[i]) != VK_SUCCESS ||
+                vkCreateFence(device, &fenceInfo, nullptr, &pThis->m_renderFences[i]) != VK_SUCCESS) {
+                LOG_DEBUG("Failed to create synchronization objects for frame %u!", i);
+            }
+        }
+        LOG_DEBUG("Created per-frame synchronization objects.");
         // Create a simple render pass for ImGui (if not already created)
         // This is crucial for ImGui_ImplVulkan_Init and framebuffer creation
         if (pThis->m_vkDevice == VK_NULL_HANDLE) { // Double-check g_vkDevice here
@@ -671,7 +654,6 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
     // Copy the original CreateInfo so we can modify it
     VkInstanceCreateInfo modifiedCreateInfo = *pCreateInfo;
 
-    // Check whether validation layer is already in the list
     if (kVkEnableValidationLayers)
     {
         // Copy the original enabled layers, if any
@@ -681,18 +663,18 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
                                  pCreateInfo->ppEnabledLayerNames + pCreateInfo->enabledLayerCount);
         }
 
+        // Check whether validation layer is already in the list
         const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
         auto it = std::find(enabledLayers.begin(), enabledLayers.end(), validationLayerName);
         if (it == enabledLayers.end()) {
             enabledLayers.push_back(validationLayerName);
             LOG_DEBUG("%s: Injected validation layer.", __func__);
         }
-
         // Update the modifiedCreateInfo to include new layers
         modifiedCreateInfo.enabledLayerCount = static_cast<uint32_t>(enabledLayers.size());
         modifiedCreateInfo.ppEnabledLayerNames = enabledLayers.data();
-    }
 
+    }
     // Call original function with modified CreateInfo
     VkResult result = pThis->m_original_vkCreateInstance(&modifiedCreateInfo, pAllocator, pInstance);
 
