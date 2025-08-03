@@ -69,6 +69,7 @@ namespace CustomSensitivity
         ImGui::SliderFloat("Third-Person Sensitivity", &m_configManager.m_config.third_person_sensitivity, min_val, max_val);
         ImGui::SliderFloat("Third-Person Aim Scale", &m_configManager.m_config.third_person_aim_scale, min_val, max_val);
         ImGui::Checkbox("Scale First-Person Sensitivity With FOV", &m_configManager.m_config.scale_first_person_sensitivity_with_fov);
+        ImGui::Checkbox("Show Menu on Start-up:", &m_configManager.m_config.show_menu_on_start_up);
     }
 
     void UIManager::DrawConfigManagementHelper()
