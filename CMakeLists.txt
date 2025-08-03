@@ -1,10 +1,16 @@
-cmake_minimum_required(VERSION 2.16)
+cmake_minimum_required(VERSION 3.1)
 project(MyProject VERSION 0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 16)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE RELEASE)
+
+
+# Set the desired runtime library for all targets in this project
+# This selects MultiThreadedDLL (/MD) for Release and
+# MultiThreadedDebugDLL (/MDd) for Debug builds.
+set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" CACHE STRING "MSVC runtime library selection")
 
 add_compile_definitions(
     _HAS_EXCEPTIONS=0
@@ -13,6 +19,10 @@ add_compile_definitions(
 )
 
 find_package(Vulkan REQUIRED)
+
+find_library(D3D12_LIBRARY NAMES d3d12)
+find_library(DXGI_LIBRARY NAMES dxgi)
+
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/minhook/include)
@@ -25,20 +35,25 @@ add_subdirectory(third-party/minhook)
 # Just one big src blob...
 add_library(CustomSensitivity SHARED
     src/main.cpp
-    src/logger.cpp
-    src/mod.cpp
-    src/renderhook_vulkan.cpp
-    src/config.cpp
-    src/ui.cpp
+    src/ConfigManager.cpp
+    src/GameHook.cpp
+    src/GraphicsHookManager.cpp
+    src/ModManager.cpp
+    src/RenderHookDX12.cpp
+    src/RenderHookVulkan.cpp
+    src/UIManager.cpp
+    src/Logger.cpp
     third-party/imgui/imgui.cpp
     third-party/imgui/imgui_draw.cpp
     third-party/imgui/imgui_widgets.cpp
     third-party/imgui/imgui_tables.cpp
+    third-party/imgui/imgui_demo.cpp
     third-party/imgui/backends/imgui_impl_vulkan.cpp
-    third-party/imgui/backends/imgui_impl_win31.cpp
+    third-party/imgui/backends/imgui_impl_dx12.cpp
+    third-party/imgui/backends/imgui_impl_win32.cpp
 )
 
-target_link_libraries(CustomSensitivity minhook Vulkan::Vulkan)
+target_link_libraries(CustomSensitivity ${DXGI_LIBRARY} ${D3D12_LIBRARY} minhook Vulkan::Vulkan)
 
 set_target_properties(CustomSensitivity PROPERTIES
                       OUTPUT_NAME "CustomSensitivity"

@@ -1,11 +1,11 @@
 #pragma once
 #include <cstdlib>
+#include <d3d12sdklayers.h>
 #include <unordered_map>
 #include <string_view>
 
 #include <Windows.h>
 #include <winnt.h>
-
 
 namespace CustomSensitivity
 {

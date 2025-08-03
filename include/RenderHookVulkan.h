@@ -1,5 +1,5 @@
 #pragma once
-#include "i_renderhook.h"
+#include "IRenderHook.h"
 
 #include <Windows.h>
 
@@ -20,6 +20,10 @@ public:
 	void UnhookGraphicsAPI() override;
 	void SetGUICallback(GuiRenderCallback callback) override;
 	void SetHandleInputCallback(HandleInputCallback callback) override;
+    std::string_view GetHookName() const override 
+	{
+ 		return "RenderHookVulkan";
+	}
 
 private:	
 	bool HookVulkanFunction(HMODULE vulkanLib, const std::string& targetFunctionName, LPVOID detourFunction, LPVOID* ppOriginal);

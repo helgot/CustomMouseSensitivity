@@ -1,6 +1,6 @@
-#include "renderhook_vulkan.h"
+#include "RenderHookVulkan.h"
 
-#include "i_renderhook.h"
+#include "IRenderHook.h"
 #include "logger.h"
 #include <MinHook.h>
 #include <imgui_impl_vulkan.h>
@@ -651,7 +651,7 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
     LOG_DEBUG("%s: Called.", __func__);
     RenderHookVulkan* pThis = static_cast<RenderHookVulkan*>(s_instance);
 
-    // Copy the original CreateInfo so we can modify it
+    // Copy the original CreateInfo so we can modify it (if we would like to add validation). 
     VkInstanceCreateInfo modifiedCreateInfo = *pCreateInfo;
 
     if (kVkEnableValidationLayers)
@@ -663,7 +663,7 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
                                  pCreateInfo->ppEnabledLayerNames + pCreateInfo->enabledLayerCount);
         }
 
-        // Check whether validation layer is already in the list
+        // Check whether validation layer is already in the list.
         const char* validationLayerName = "VK_LAYER_KHRONOS_validation";
         auto it = std::find(enabledLayers.begin(), enabledLayers.end(), validationLayerName);
         if (it == enabledLayers.end()) {
@@ -675,7 +675,7 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateInstance(const VkInstanceCre
         modifiedCreateInfo.ppEnabledLayerNames = enabledLayers.data();
 
     }
-    // Call original function with modified CreateInfo
+    // Call original function with modified CreateInfo.
     VkResult result = pThis->m_original_vkCreateInstance(&modifiedCreateInfo, pAllocator, pInstance);
 
     if (result == VK_SUCCESS) {
