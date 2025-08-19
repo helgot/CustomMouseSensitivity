@@ -3,13 +3,13 @@
 
 namespace CustomSensitivity
 {
-    class ConfigManager
-    {
-    public:
-        ConfigManager();
-        bool SaveConfig();
-        void LoadConfig();
+class ConfigManager
+{
+public:
+    ConfigManager();
+    bool SaveConfig();
+    void LoadConfig();
 
-        Config m_config;
-    };
-}
+    Config m_config;
+};
+} // namespace CustomSensitivity

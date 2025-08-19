@@ -28,7 +28,7 @@ find_package(Vulkan REQUIRED)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/minhook/include)
-include_directories(${PROJECT_SOURCE_DIR}/third-party/nlohmann)
+include_directories(${PROJECT_SOURCE_DIR}/third-party/json/single_include/nlohmann)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/imgui)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/imgui/backends)
 
