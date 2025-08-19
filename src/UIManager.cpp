@@ -1,6 +1,12 @@
 #include "UIManager.h"
 #include <Windows.h>
 #include "imgui.h"
+#include "UIManager.h"
+#include <Windows.h>
+#include "imgui.h"
+
+// 全局变量用于 Vulkan 渲染钩子判断菜单可见性
+bool g_isMenuVisible = false;
 
 namespace CustomSensitivity
 {
@@ -9,6 +15,7 @@ namespace CustomSensitivity
     {
         // Initialize the menu visibility from the loaded config
         m_isMenuVisible = m_configManager.m_config.show_menu_on_start_up;
+        g_isMenuVisible = m_isMenuVisible;
     }
 
     DebugData& UIManager::GetDebugData()
@@ -18,6 +25,7 @@ namespace CustomSensitivity
 
     void UIManager::Render()
     {
+        g_isMenuVisible = m_isMenuVisible;
         if (!m_isMenuVisible)
             return;
 
@@ -50,6 +58,7 @@ namespace CustomSensitivity
         if (isF10Pressed && !wasF10Pressed)
         {
             m_isMenuVisible = !m_isMenuVisible;
+            g_isMenuVisible = m_isMenuVisible; // 切换菜单时同步全局变量
 
             // Show/hide the mouse cursor along with the menu
             ImGuiIO& io = ImGui::GetIO();

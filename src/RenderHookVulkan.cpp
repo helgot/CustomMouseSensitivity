@@ -404,10 +404,21 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
     if (!pThis->m_imguiInitialized) {
         pThis->InitializeImGui();
     }
-    VkPresentInfoKHR modifiedPresentInfo = *pPresentInfo;
 
-    if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0)
+    // 判断菜单是否可见（UIManager::m_isMenuVisible），只有可见时才渲染 ImGui
+    bool isMenuVisible = false;
+    if (pThis->m_guiCallback) {
+        // 通过 UIManager 的 Render 回调是否有内容判断
+        // 这里假设 m_guiCallback 是 UIManager::Render，且 UIManager 内部有 m_isMenuVisible
+        // 推荐将 UIManager::m_isMenuVisible 暴露为 public 或加一个 getter
+        // 这里用静态变量 hack（实际建议用 getter）
+        extern bool g_isMenuVisible;
+        isMenuVisible = g_isMenuVisible;
+    }
+
+    if (pThis->m_imguiInitialized && pPresentInfo->waitSemaphoreCount > 0 && isMenuVisible)
     {
+        VkPresentInfoKHR modifiedPresentInfo = *pPresentInfo;
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplWin32_NewFrame();
         ImGui::NewFrame();
@@ -417,11 +428,9 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         ImDrawData* draw_data = ImGui::GetDrawData();
         uint32_t imageIndex = pPresentInfo->pImageIndices[0];
 
-        // Get the correct fence and semaphore for the current frame
         VkFence currentFrameFence = pThis->m_renderFences[imageIndex];
         VkSemaphore currentFrameSemaphore = pThis->m_renderCompleteSemaphores[imageIndex];
 
-        // Ensure the command pool for this frame is ready
         vkResetCommandPool(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 0);
 
         VkCommandBufferAllocateInfo allocInfo{};
@@ -441,7 +450,6 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
         vkBeginCommandBuffer(imguiCmdBuffer, &beginInfo);
-        // Begin render pass for ImGui
         VkRenderPassBeginInfo renderPassBeginInfo{};
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassBeginInfo.renderPass = pThis->m_imguiRenderPass;
@@ -474,12 +482,13 @@ VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkQueuePresentKHR(VkQueue queue, con
         vkWaitForFences(pThis->m_vkDevice, 1, &currentFrameFence, VK_TRUE, UINT64_MAX);
 
         vkFreeCommandBuffers(pThis->m_vkDevice, pThis->m_imguiCommandPools[imageIndex], 1, &imguiCmdBuffer);
-    
+
         modifiedPresentInfo.pWaitSemaphores = &currentFrameSemaphore;
+        return pThis->m_original_vkQueuePresentKHR(queue, &modifiedPresentInfo);
     }
 
-    // Call the original vkQueuePresentKHR with the correctly chained semaphore
-    return pThis->m_original_vkQueuePresentKHR(queue, &modifiedPresentInfo);
+    // 菜单关闭时，直接调用原始 Present，不做任何 ImGui 渲染和同步
+    return pThis->m_original_vkQueuePresentKHR(queue, pPresentInfo);
 }
 
 VkResult VKAPI_PTR RenderHookVulkan::Hooked_vkCreateDevice(VkPhysicalDevice physicalDevice, const VkDeviceCreateInfo* pCreateInfo, const VkAllocationCallbacks* pAllocator, VkDevice* pDevice)
