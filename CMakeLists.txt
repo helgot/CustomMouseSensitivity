@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.1)
+cmake_minimum_required(VERSION 3.5)
 project(MyProject VERSION 0.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
@@ -6,6 +6,11 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_BUILD_TYPE RELEASE)
 
+
+
+# 查找 DirectX 12 和 DXGI 库
+find_library(D3D12_LIBRARY d3d12 HINTS "$ENV{WindowsSdkDir}/Lib/$ENV{WindowsSDKVersion}/um/x64" "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64")
+find_library(DXGI_LIBRARY dxgi HINTS "$ENV{WindowsSdkDir}/Lib/$ENV{WindowsSDKVersion}/um/x64" "C:/Program Files (x86)/Windows Kits/10/Lib/10.0.26100.0/um/x64")
 
 # Set the desired runtime library for all targets in this project
 # This selects MultiThreadedDLL (/MD) for Release and
@@ -20,15 +25,13 @@ add_compile_definitions(
 
 find_package(Vulkan REQUIRED)
 
-find_library(D3D12_LIBRARY NAMES d3d12)
-find_library(DXGI_LIBRARY NAMES dxgi)
-
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/minhook/include)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/nlohmann)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/imgui)
 include_directories(${PROJECT_SOURCE_DIR}/third-party/imgui/backends)
+
 
 add_subdirectory(third-party/minhook)
 
