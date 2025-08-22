@@ -69,24 +69,64 @@ void UIManager::DrawControlConfigHelper()
 {
     constexpr float min_val = 0.0f;
     constexpr float max_val = 10.0f;
+    ImGui::Checkbox("Scale First-Person Sensitivity With FOV",
+                    &m_configManager.m_config.scale_first_person_sensitivity_with_fov);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("Determines whether the senstivity is adjusted based on the first-person FOV."
+            "\nThe game scales the sensitivity with the first-person FOV by default.");
+        ImGui::EndTooltip();
+    }
 
     ImGui::SliderFloat("First-Person Sensitivity",
                        &m_configManager.m_config.first_person_sensitivity,
                        min_val, max_val);
-    ImGui::SliderFloat("First-Person Aim Scale",
-                       &m_configManager.m_config.first_person_aim_scale,
-                       min_val, max_val);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("First-person sensitivity (overrides the in-game setting).");
+        ImGui::EndTooltip();
+    }
+    
     ImGui::SliderFloat("Third-Person Sensitivity",
                        &m_configManager.m_config.third_person_sensitivity,
                        min_val, max_val);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("Third-person sensitivity (overrides the in-game setting).");
+        ImGui::EndTooltip();
+    }
+    
+    ImGui::SliderFloat("First-Person Aim Scale",
+                       &m_configManager.m_config.first_person_aim_scale,
+                       min_val, max_val);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("First-person aim scale (overrides the in-game setting).");
+        ImGui::EndTooltip();
+    }
+    
     ImGui::SliderFloat("Third-Person Aim Scale",
                        &m_configManager.m_config.third_person_aim_scale,
                        min_val, max_val);
-    ImGui::Checkbox(
-        "Scale First-Person Sensitivity With FOV",
-        &m_configManager.m_config.scale_first_person_sensitivity_with_fov);
-    ImGui::Checkbox("Show Menu on Start-up:",
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("Third-person aim scale (overrides the in-game setting).");
+        ImGui::EndTooltip();
+    }
+    
+    ImGui::Checkbox("Show Menu on Start-up",
                     &m_configManager.m_config.show_menu_on_start_up);
+    if (ImGui::IsItemHovered())
+    {
+        ImGui::BeginTooltip();
+        ImGui::Text("Determines whether the menu will be shown at the start-up of the game.");
+        ImGui::EndTooltip();
+    }
 }
 
 void UIManager::DrawConfigManagementHelper()
