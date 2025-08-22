@@ -69,13 +69,14 @@ void UIManager::DrawControlConfigHelper()
 {
     constexpr float min_val = 0.0f;
     constexpr float max_val = 10.0f;
-    ImGui::Checkbox("Scale First-Person Sensitivity With FOV",
-                    &m_configManager.m_config.scale_first_person_sensitivity_with_fov);
+    ImGui::Checkbox("Undo First-Person FOV Scaling",
+                    &m_configManager.m_config.undo_first_person_fov_scaling);
     if (ImGui::IsItemHovered())
     {
         ImGui::BeginTooltip();
-        ImGui::Text("Determines whether the senstivity is adjusted based on the first-person FOV."
-            "\nThe game scales the sensitivity with the first-person FOV by default.");
+        ImGui::Text("Removes the sensitivity scaling applied in the first-person mode when the "
+                    "FOV is adjusted. E.g., when you're in ADS mode."
+                    "\nThe game by default scales the sensitivity with the first-person FOV.");
         ImGui::EndTooltip();
     }
 

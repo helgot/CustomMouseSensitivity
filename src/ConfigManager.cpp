@@ -15,8 +15,8 @@ void to_json(nlohmann::json &j, const Config &config)
          {"first_person_aim_scale", config.first_person_aim_scale},
          {"third_person_sensitivity", config.third_person_sensitivity},
          {"third_person_aim_scale", config.third_person_aim_scale},
-         {"scale_first_person_sensitivity_with_fov",
-          config.scale_first_person_sensitivity_with_fov},
+         {"undo_first_person_fov_scaling",
+          config.undo_first_person_fov_scaling},
          {"show_menu_on_start_up", config.show_menu_on_start_up},
          {"log_level", config.log_level}};
 }
@@ -29,8 +29,8 @@ void from_json(const nlohmann::json &j, Config &config)
     config.first_person_aim_scale = j.value("first_person_aim_scale", 1.0f);
     config.third_person_sensitivity = j.value("third_person_sensitivity", 1.0f);
     config.third_person_aim_scale = j.value("third_person_aim_scale", 1.0f);
-    config.scale_first_person_sensitivity_with_fov =
-        j.value("scale_first_person_sensitivity_with_fov", true);
+    config.undo_first_person_fov_scaling =
+        j.value("undo_first_person_fov_scaling", true);
     config.show_menu_on_start_up = j.value("show_menu_on_start_up", true);
     config.log_level = j.value("log_level", "L_INFO");
 }

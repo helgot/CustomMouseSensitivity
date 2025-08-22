@@ -118,7 +118,7 @@ __int64 __fastcall GameHook::ThirdPersonMouseSensitivity(int64_t a1, int64_t a2,
                                         // (interpolated in transition)
     float aiming_scale =
         1.0f + aiming * (pThis->m_config.third_person_aim_scale - 1.0f);
-    float scale = pThis->m_config.third_person_sensitivity * aiming_scale *
+        float scale = pThis->m_config.third_person_sensitivity * aiming_scale *
                   kThirdPersonQuakeScale;
 
     float v11, v12;
@@ -173,7 +173,7 @@ void __fastcall GameHook::FirstPersonMouseSensitivity(__int64 a1, __int64 a2,
                    (pThis->m_config.first_person_aim_scale - 1.0f);
 
     float fov = *reinterpret_cast<float *>(pThis->m_debugData.fov_address);
-    float fov_scale = pThis->m_config.scale_first_person_sensitivity_with_fov
+    float fov_scale = pThis->m_config.undo_first_person_fov_scaling
                           ? fov / kBaseFirstPersonFov
                           : 1.0f;
     float scale = pThis->m_config.first_person_sensitivity * aiming_scale *
